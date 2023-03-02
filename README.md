@@ -6,7 +6,7 @@ This package provides an implementation of the OpenAI Chat API for GPT-3.5, allo
 ### Quick Start
 - Import the openai package:
 ```Go
-import "github.com/Wind-318/wind_chimes/openai"
+import "github.com/Wind-318/wind-chimes/openai"
 ```
 
 - Create a new Chat object:
