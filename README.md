@@ -35,7 +35,7 @@ chat.SetN(1)
 
 - Send the chat request to the API:
 ```Go
-resp, err := chat.Send()
+resp, err := chat.NewChat()
 if err != nil {
     // Handle error
 }
