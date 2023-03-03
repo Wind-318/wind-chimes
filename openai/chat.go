@@ -5,6 +5,7 @@
 // Use of this source code is governed by a MIT license
 // that can be found in the LICENSE file.
 
+// package openai is used to call the api of chatgpt-3.5
 package openai
 
 import (
@@ -15,8 +16,8 @@ import (
 	"strings"
 )
 
-// The message object is used to represent a message in a conversation.
-type OpenAIMessage struct {
+// Message is the message struct.
+type Message struct {
 	// Role is the role of the message. Can be "user" or "system".
 	Role string `json:"role"`
 	// Content is the content of the message.
@@ -37,16 +38,16 @@ type Usage struct {
 type Choice struct {
 	// The index of the choice.
 	Index int `json:"index"`
-	// Message is the message object is used to represent a message in a conversation.
-	Message OpenAIMessage `json:"message"`
+	// Msg is the message object is used to represent a message in a conversation.
+	Msg Message `json:"message"`
 	// FinishReason is the reason the chat completion stopped.
-	Finish_reason string `json:"finish_reason"`
+	FinishReason string `json:"finish_reason"`
 }
 
-// ChatCompletion is the chat completion object is used to represent a chat completion.
+// ChatResponse is the chat completion object is used to represent a chat completion.
 type ChatResponse struct {
 	// ID is the ID of the chat completion.
-	Id string `json:"id"`
+	ID string `json:"id"`
 	// Object is the object type of the chat completion.
 	Object string `json:"object"`
 	// Created is the timestamp of when the chat completion was created.
@@ -57,17 +58,20 @@ type ChatResponse struct {
 	Usages Usage `json:"usage"`
 }
 
+// Chat is the chat data
 type Chat struct {
+	// Request data
 	Data map[string]interface{}
-	Key  string
+	// Secret key
+	Key string
 }
 
-// Set Authorization key
+// SetAuthorization is used to set authorization key
 func (c *Chat) SetAuthorizationKey(key string) {
 	c.Key = key
 }
 
-// Add a message to the chat.
+// AddMessage is used to add message to the chat.
 // The role can be "user" or "system".
 func (c *Chat) AddMessage(role, content string) {
 	if _, ok := c.Data["messages"]; !ok {
@@ -80,7 +84,7 @@ func (c *Chat) AddMessage(role, content string) {
 	})
 }
 
-// temperature number Optional Defaults to 1;
+// SetTemperature: temperature number Optional Defaults to 1;
 // What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random
 // while lower values like 0.2 will make it more focused and deterministic.
 // We generally recommend altering this or top_p but not both.
@@ -88,21 +92,21 @@ func (c *Chat) SetTemperature(temperature float64) {
 	c.Data["temperature"] = temperature
 }
 
-// top.p number Optional Defaults to 1;
+// SetTopP: top.p number Optional Defaults to 1;
 // An alternative to sampling with temperature, called nucleus sampling,
 // where the model considers the results of the tokens with top_p probability mass.
 // So 0.1 means only the tokens comprising the top 10% probability mass are considered.
 // We generally recommend altering this or temperature but not both.
-func (c *Chat) SetTopP(top_p float64) {
-	c.Data["top_p"] = top_p
+func (c *Chat) SetTopP(topP float64) {
+	c.Data["top_p"] = topP
 }
 
-// How many chat completion choices to generate for each input message.
+// SetN: How many chat completion choices to generate for each input message.
 func (c *Chat) SetN(n int) {
 	c.Data["n"] = n
 }
 
-// stream boolean Optional Defaults to false.
+// SetStream: stream boolean Optional Defaults to false.
 // If set, partial message deltas will be sent, like in ChatGPT.
 // Tokens will be sent as data-only server-sent events as they become available,
 // with the stream terminated by a data: [DONE] message.
@@ -110,57 +114,57 @@ func (c *Chat) SetStream(stream bool) {
 	c.Data["stream"] = stream
 }
 
-// stop string or array Optional Defaults to null;
+// SetStopStr: stop string or array Optional Defaults to null;
 // Up to 4 sequences where the API will stop generating further tokens.
 func (c *Chat) SetStopStr(stop string) {
 	c.Data["stop"] = stop
 }
 
-// stop string or array Optional Defaults to null;
+// SetStopArr: stop string or array Optional Defaults to null;
 // Up to 4 sequences where the API will stop generating further tokens.
 func (c *Chat) SetStopArr(stop []string) {
 	c.Data["stop"] = stop
 }
 
-// max_tokens integer Optional Defaults to inf;
+// SetMaxTokens: max_tokens integer Optional Defaults to inf;
 // The maximum number of tokens allowed for the generated answer.
 // By default, the number of tokens the model can return will be (4096 - prompt tokens).
-func (c *Chat) SetMaxTokens(max_tokens int) {
-	c.Data["max_tokens"] = max_tokens
+func (c *Chat) SetMaxTokens(maxTokens int) {
+	c.Data["max_tokens"] = maxTokens
 }
 
-// presence_penalty number Optional Defaults to 0;
+// SetPresencePenalty: presence_penalty number Optional Defaults to 0;
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear
 // in the text so far, increasing the model's likelihood to talk about new topics.
-func (c *Chat) SetPresencePenalty(presence_penalty float64) {
-	c.Data["presence_penalty"] = presence_penalty
+func (c *Chat) SetPresencePenalty(presencePenalty float64) {
+	c.Data["presence_penalty"] = presencePenalty
 }
 
-// frequency_penalty number Optional Defaults to 0;
+// SetFrequencyPenalty: frequency_penalty number Optional Defaults to 0;
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing
 // frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
-func (c *Chat) SetFrequencyPenalty(frequency_penalty float64) {
-	c.Data["frequency_penalty"] = frequency_penalty
+func (c *Chat) SetFrequencyPenalty(frequencyPenalty float64) {
+	c.Data["frequency_penalty"] = frequencyPenalty
 }
 
-// logit_bias map Optional Defaults to null;
+// SetLogitBias: logit_bias map Optional Defaults to null;
 // Modify the likelihood of specified tokens appearing in the completion.
 // Accepts a json object that maps tokens (specified by their token ID in the tokenizer)
 // to an associated bias value from -100 to 100. Mathematically, the bias is added to the logits
 // generated by the model prior to sampling. The exact effect will vary per model, but values
 // between -1 and 1 should decrease or increase likelihood of selection; values like -100 or 100
 // should result in a ban or exclusive selection of the relevant token.
-func (c *Chat) SetLogitBias(logit_bias map[string]int) {
-	c.Data["logit_bias"] = logit_bias
+func (c *Chat) SetLogitBias(logitBias map[string]int) {
+	c.Data["logit_bias"] = logitBias
 }
 
-// user string Optional;
+// SetUser: user string Optional;
 // A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
 func (c *Chat) SetUser(user string) {
 	c.Data["user"] = user
 }
 
-// GetOpenAIResponse is the function to get the response from the OpenAI API.
+// NewChat: GetOpenAIResponse is the function to get the response from the OpenAI API.
 func NewChat(c *Chat) (*ChatResponse, error) {
 	urls := "https://api.openai.com/v1/chat/completions"
 
@@ -210,7 +214,7 @@ func NewChat(c *Chat) (*ChatResponse, error) {
 	return res, nil
 }
 
-// Get the messages from the response.
+// NewChatText: Get the messages from the response.
 func NewChatText(c *Chat) ([]string, error) {
 	res, err := NewChat(c)
 	if err != nil {
@@ -219,7 +223,7 @@ func NewChatText(c *Chat) ([]string, error) {
 
 	var messages []string
 	for index := range res.Choices {
-		messages = append(messages, res.Choices[index].Message.Content)
+		messages = append(messages, res.Choices[index].Msg.Content)
 	}
 
 	return messages, nil
