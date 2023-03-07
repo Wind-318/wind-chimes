@@ -14,11 +14,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Message is the message struct.
 type Message struct {
-	// Role is the role of the message. Can be "user" or "system".
+	// Role is the role of the message. Can be "user", "system" or "assistant".
 	Role string `json:"role"`
 	// Content is the content of the message.
 	Content string `json:"content"`
@@ -61,27 +63,47 @@ type ChatResponse struct {
 // Chat is the chat data
 type Chat struct {
 	// Request data
-	Data map[string]interface{}
+	data sync.Map
 	// Secret key
-	Key string
+	key atomic.Value
+	// Mutex
+	mutex sync.RWMutex
 }
 
 // SetAuthorizationKey is used to set authorization key
 func (c *Chat) SetAuthorizationKey(key string) {
-	c.Key = key
+	c.key.Store(key)
+	c.data.Store("model", "gpt-3.5-turbo")
 }
 
-// AddMessage is used to add message to the chat.
-// The role can be "user" or "system".
-func (c *Chat) AddMessage(role, content string) {
-	if _, ok := c.Data["messages"]; !ok {
-		c.Data["messages"] = []map[string]string{}
-	}
+func (c *Chat) addMessage(role, content string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	c.Data["messages"] = append(c.Data["messages"].([]map[string]string), map[string]string{
+	if _, ok := c.data.Load("messages"); !ok {
+		c.data.Store("messages", []map[string]string{})
+	}
+	val, _ := c.data.Load("messages")
+	var messages []map[string]string = val.([]map[string]string)
+	messages = append(messages, map[string]string{
 		"role":    role,
 		"content": content,
 	})
+	c.data.Store("messages", messages)
+}
+
+// AddMessage is used to add message to the chat.
+// The role can be "user", "system" or "assistant".
+func (c *Chat) AddMessageAsUser(content string) {
+	c.addMessage("user", content)
+}
+
+func (c *Chat) AddMessageAsSystem(content string) {
+	c.addMessage("system", content)
+}
+
+func (c *Chat) AddMessageAsAssistant(content string) {
+	c.addMessage("assistant", content)
 }
 
 // SetTemperature temperature number Optional Defaults to 1;
@@ -89,7 +111,7 @@ func (c *Chat) AddMessage(role, content string) {
 // while lower values like 0.2 will make it more focused and deterministic.
 // We generally recommend altering this or top_p but not both.
 func (c *Chat) SetTemperature(temperature float64) {
-	c.Data["temperature"] = temperature
+	c.data.Store("temperature", temperature)
 }
 
 // SetTopP top.p number Optional Defaults to 1;
@@ -98,12 +120,12 @@ func (c *Chat) SetTemperature(temperature float64) {
 // So 0.1 means only the tokens comprising the top 10% probability mass are considered.
 // We generally recommend altering this or temperature but not both.
 func (c *Chat) SetTopP(topP float64) {
-	c.Data["top_p"] = topP
+	c.data.Store("top_p", topP)
 }
 
 // SetN How many chat completion choices to generate for each input message.
 func (c *Chat) SetN(n int) {
-	c.Data["n"] = n
+	c.data.Store("n", n)
 }
 
 // SetStream stream boolean Optional Defaults to false.
@@ -111,40 +133,40 @@ func (c *Chat) SetN(n int) {
 // Tokens will be sent as data-only server-sent events as they become available,
 // with the stream terminated by a data: [DONE] message.
 func (c *Chat) SetStream(stream bool) {
-	c.Data["stream"] = stream
+	c.data.Store("stream", stream)
 }
 
 // SetStopStr stop string or array Optional Defaults to null;
 // Up to 4 sequences where the API will stop generating further tokens.
 func (c *Chat) SetStopStr(stop string) {
-	c.Data["stop"] = stop
+	c.data.Store("stop", stop)
 }
 
 // SetStopArr stop string or array Optional Defaults to null;
 // Up to 4 sequences where the API will stop generating further tokens.
 func (c *Chat) SetStopArr(stop []string) {
-	c.Data["stop"] = stop
+	c.data.Store("stop", stop)
 }
 
 // SetMaxTokens max_tokens integer Optional Defaults to inf;
 // The maximum number of tokens allowed for the generated answer.
 // By default, the number of tokens the model can return will be (4096 - prompt tokens).
 func (c *Chat) SetMaxTokens(maxTokens int) {
-	c.Data["max_tokens"] = maxTokens
+	c.data.Store("max_tokens", maxTokens)
 }
 
 // SetPresencePenalty presence_penalty number Optional Defaults to 0;
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear
 // in the text so far, increasing the model's likelihood to talk about new topics.
 func (c *Chat) SetPresencePenalty(presencePenalty float64) {
-	c.Data["presence_penalty"] = presencePenalty
+	c.data.Store("presence_penalty", presencePenalty)
 }
 
 // SetFrequencyPenalty frequency_penalty number Optional Defaults to 0;
 // Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing
 // frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
 func (c *Chat) SetFrequencyPenalty(frequencyPenalty float64) {
-	c.Data["frequency_penalty"] = frequencyPenalty
+	c.data.Store("frequency_penalty", frequencyPenalty)
 }
 
 // SetLogitBias logit_bias map Optional Defaults to null;
@@ -155,23 +177,35 @@ func (c *Chat) SetFrequencyPenalty(frequencyPenalty float64) {
 // between -1 and 1 should decrease or increase likelihood of selection; values like -100 or 100
 // should result in a ban or exclusive selection of the relevant token.
 func (c *Chat) SetLogitBias(logitBias map[string]int) {
-	c.Data["logit_bias"] = logitBias
+	c.data.Store("logit_bias", logitBias)
 }
 
 // SetUser user string Optional;
 // A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
 func (c *Chat) SetUser(user string) {
-	c.Data["user"] = user
+	c.data.Store("user", user)
+}
+
+func (c *Chat) GetHistoryMessages() []map[string]string {
+	val, _ := c.data.Load("messages")
+	var messages []map[string]string = val.([]map[string]string)
+	return messages
 }
 
 // NewChat GetOpenAIResponse is the function to get the response from the OpenAI API.
-func NewChat(c *Chat) (*ChatResponse, error) {
+func (c *Chat) NewChat() (*ChatResponse, error) {
 	urls := "https://api.openai.com/v1/chat/completions"
 
-	c.Data["model"] = "gpt-3.5-turbo"
+	c.mutex.RLock()
+
+	mapVal := map[string]interface{}{}
+	c.data.Range(func(key, value interface{}) bool {
+		mapVal[key.(string)] = value
+		return true
+	})
 
 	// convert to json
-	jsonBody, err := json.Marshal(c.Data)
+	jsonBody, err := json.Marshal(mapVal)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +219,7 @@ func NewChat(c *Chat) (*ChatResponse, error) {
 	// set authorization key
 	key := strings.Builder{}
 	key.WriteString("Bearer ")
-	key.WriteString(c.Key)
+	key.WriteString(c.key.Load().(string))
 
 	// set headers
 	req.Header.Set("Content-Type", "application/json")
@@ -211,12 +245,19 @@ func NewChat(c *Chat) (*ChatResponse, error) {
 		return nil, err
 	}
 
+	c.mutex.RUnlock()
+
+	// Append message of assistant to the messages.
+	for index := range res.Choices {
+		c.AddMessageAsAssistant(res.Choices[index].Msg.Content)
+	}
+
 	return res, nil
 }
 
 // NewChatText Get the messages from the response.
-func NewChatText(c *Chat) ([]string, error) {
-	res, err := NewChat(c)
+func (c *Chat) NewChatText() ([]string, error) {
+	res, err := c.NewChat()
 	if err != nil {
 		return nil, err
 	}

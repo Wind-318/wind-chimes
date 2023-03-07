@@ -11,9 +11,7 @@ import "github.com/Wind-318/wind-chimes/openai"
 
 - Create a new Chat object:
 ```Go
-chat := &openai.Chat{
-	Data: make(map[string]interface{}),
-}
+chat := &openai.Chat{}
 ```
 
 - Set the authorization key for the API:
@@ -23,7 +21,8 @@ chat.SetAuthorizationKey("YOUR_API_KEY")
 
 - Add messages to the chat:
 ```Go
-chat.AddMessage("user", "Hello")
+chat.AddMessage("system", "You are azur lane akashi.")
+chat.AddMessage("user", "Hello akashi, introduce yourself.")
 ```
 
 - Set any additional parameters for the chat(optional):
