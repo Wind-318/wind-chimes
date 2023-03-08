@@ -11,6 +11,7 @@ package openai
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -246,6 +247,10 @@ func (c *Chat) NewChat() (*ChatResponse, error) {
 	}
 
 	c.mutex.RUnlock()
+
+	if res.Choices == nil {
+		return nil, errors.New("no response")
+	}
 
 	// Append message of assistant to the messages.
 	for index := range res.Choices {
